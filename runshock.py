@@ -18,7 +18,7 @@ import lcpfct
 ['__doc__', '__file__', '__loader__', '__name__', '__package__', '__spec__', '__version__', 'arrays', 'conserve', 'fct_grid', 'fct_misc', 'fct_ndex', 'fct_scrh', 'fct_velo', 'gasdyn', 'lcpfct', 'makegrid', 'old_grid', 'residiff', 'set_grid', 'shock', 'sources', 'velocity', 'zerodiff', 'zeroflux']
 
 """
-from pandas import Panel
+from xarray import Dataset
 from matplotlib.pyplot import draw, pause,subplots, show
 from time import time
 #
@@ -31,11 +31,21 @@ def runshock():
     darr = shock.shock(nx)
     dr = darr[:,:5].reshape((-1,nx,5),order='C')
 
-    dpan = Panel(dr,major_axis=darr[:nx,5],
-                    minor_axis=('Density','Temperature','Pressure',
-                              'Velocity','Energy')) #FIXME read dt from Fortran
+#    dpan = Panel(dr,major_axis=darr[:nx,5],
+#                    minor_axis=('Density','Temperature','Pressure',
+#                              'Velocity','Energy')) #FIXME read dt from Fortran
 
-    return dpan
+    dat = Dataset({'Density':     (['time','range'],dr[:,:,0]),
+                   'Temperature': (['time','range'],dr[:,:,1]),
+                   'Pressure':    (['time','range'],dr[:,:,2]),
+                   'Velocity':    (['time','range'],dr[:,:,3]),
+                   'Energy':      (['time','range'],dr[:,:,4]),
+                  },
+                  coords={'time':range(dr.shape[0]), # choose time as first axis for iteration later
+                          'range':darr[:nx,5]}
+                  )
+
+    return dat
 
 #def readshock(fn):
 #    fn = expanduser(fn)
@@ -73,18 +83,18 @@ def runshock():
 #    return Panel(dat[...,:5], t, dat[0,:,5], hd[1:-1])
 
 def plotshock(dat):
-    fg,ax = subplots(5,1,num=1,sharex=True)
+    fg,ax = subplots(5,1,sharex=True)
     fg.subplots_adjust(hspace=0.05)
-    ht = fg.suptitle('1-D shock')
+    fg.suptitle('1-D shock')
     ax[-1].set_xlabel('x displacement')
 
-    for i,j in enumerate(dat.minor_axis.values):
+    for i,j in enumerate(dat.data_vars):
         ax[i].set_ylabel(j)
 
-    for t,da in dat.items():
+    for t in dat['time'].values: # iterate over time
        # ht.set_text('1-D shock: t={:.3f} sec.'.format(t)) #FIXME get more variables from Fortran
-        for i,(j,d) in enumerate(da.iteritems()):
-            ax[i].plot(d,label=j)
+        for i,d in enumerate(dat.data_vars): # iterate over time (first axis)
+            ax[i].plot(dat[d][t],label=j)
         draw()
         pause(0.5)
 
